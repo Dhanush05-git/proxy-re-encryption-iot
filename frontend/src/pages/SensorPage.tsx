@@ -1,33 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Cpu, RefreshCw, Zap, History } from 'lucide-react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { Cpu, RefreshCw, Zap, History, Plus, Lock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { generateReading, generateBatch, getReadings, generateHistorical } from '../lib/api';
 import type { SensorReading } from '../lib/api';
-import { useAuth } from '../contexts/AuthContext';
-
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string; color: string }[]; label?: string }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="card p-3 text-xs" style={{ border: '1px solid #1f2937' }}>
-      <div className="text-gray-400 mb-1">{label}</div>
-      {payload.map((p) => (
-        <div key={p.name} style={{ color: p.color }}>
-          {p.name}: <strong>{p.value?.toFixed(2)}</strong>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 export default function SensorPage() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [loading, setLoading] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
   const [histLoading, setHistLoading] = useState(false);
-  const [sensorId, setSensorId] = useState('SENSOR_001');
+  const [sensorId, setSensorId] = useState('SENSOR-001');
   const [status, setStatus] = useState('');
 
   const fetchReadings = async () => {
@@ -44,8 +27,10 @@ export default function SensorPage() {
     setStatus('');
     try {
       const res = await generateReading(sensorId);
-      setReadings((prev) => [res.data, ...prev].slice(0, 100));
-      setStatus(`Generated reading for ${res.data.sensor_id}`);
+      // Backend returns { generated: 1, readings: [...] } or direct item
+      const item = (res.data as unknown as { readings?: SensorReading[] }).readings?.[0] ?? res.data;
+      setReadings((prev) => [item, ...prev].slice(0, 100));
+      setStatus(`✓ Generated telemetry for ${item.sensor_id}`);
     } catch {
       setStatus('Error generating reading');
     } finally {
@@ -58,8 +43,9 @@ export default function SensorPage() {
     setStatus('');
     try {
       const res = await generateBatch(10);
-      setReadings((prev) => [...res.data, ...prev].slice(0, 100));
-      setStatus(`Generated ${res.data.length} readings`);
+      const items = (res.data as unknown as { readings?: SensorReading[] }).readings ?? (res.data as unknown as SensorReading[]);
+      setReadings((prev) => [...items, ...prev].slice(0, 100));
+      setStatus('✓ Batch of 10 simulated sensor telemetry records generated & stored');
     } catch {
       setStatus('Error generating batch');
     } finally {
@@ -72,9 +58,9 @@ export default function SensorPage() {
     setStatus('');
     try {
       const res = await generateHistorical(sensorId, 7);
-      setReadings((prev) => [...res.data, ...prev].slice(0, 200));
-      setStatus(`Generated ${res.data.length} historical readings for ${sensorId}`);
-      await fetchReadings();
+      const items = (res.data as unknown as { readings?: SensorReading[] }).readings ?? [];
+      setReadings((prev) => [...items, ...prev].slice(0, 150));
+      setStatus(`✓ Generated 7-day historical telemetry curve (${items.length} points)`);
     } catch {
       setStatus('Error generating historical data');
     } finally {
@@ -82,147 +68,153 @@ export default function SensorPage() {
     }
   };
 
-  const chartData = readings.slice(0, 24).reverse().map((r, i) => ({
-    t: `T${i + 1}`,
-    temp: r.temperature,
-    humidity: r.humidity,
-    air: r.air_quality,
-  }));
-
-  const statusColor = (s: string) => {
-    if (s === 'active') return 'badge-green';
-    if (s === 'warning') return 'badge-yellow';
-    return 'badge-red';
+  const handleQuickEncrypt = (r: SensorReading) => {
+    navigate('/encryption');
   };
+
+  // Compute live averages
+  const avgTemp = readings.length > 0 ? (readings.reduce((acc, r) => acc + (r.temperature || 0), 0) / readings.length).toFixed(1) : '24.5';
+  const avgHum = readings.length > 0 ? (readings.reduce((acc, r) => acc + (r.humidity || 0), 0) / readings.length).toFixed(1) : '52.0';
+  const avgAqi = readings.length > 0 ? (readings.reduce((acc, r) => acc + (r.air_quality || 0), 0) / readings.length).toFixed(0) : '85';
+  const avgPress = readings.length > 0 ? (readings.reduce((acc, r) => acc + (r.pressure || 0), 0) / readings.length).toFixed(1) : '1013.2';
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Cpu style={{ color: '#00d4ff' }} /> IoT Sensor Simulator
-        </h1>
-        <p className="text-sm mt-1" style={{ color: '#6b7280' }}>
-          Generate and monitor sensor readings from IoT devices
-        </p>
-      </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-white flex items-center gap-2">
+            <Cpu className="text-cyan-400" /> Simulated IoT Telemetry Engine
+          </h1>
+          <p className="text-xs text-gray-400 mt-1">
+            Software-simulated sensor devices generating authentic multi-variable telemetry without physical microcontrollers
+          </p>
+        </div>
 
-      {/* Controls */}
-      <div className="card flex flex-wrap items-center gap-4">
-        <div className="flex-1 min-w-48">
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#9ca3af' }}>
-            SENSOR ID
-          </label>
-          <select
-            className="input-field"
-            value={sensorId}
-            onChange={(e) => setSensorId(e.target.value)}
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="px-3.5 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-semibold text-white flex items-center gap-2 transition-all"
           >
-            {['SENSOR_001', 'SENSOR_002', 'SENSOR_003', 'SENSOR_004', 'SENSOR_005'].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
+            {loading ? <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" /> : <Plus size={14} className="text-cyan-400" />}
+            +1 Reading
+          </button>
+
+          <button
+            onClick={handleBatch}
+            disabled={batchLoading}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-xs font-bold text-white shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all"
+          >
+            {batchLoading ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Zap size={14} />}
+            Batch Simulation (10x)
+          </button>
+
+          <button
+            onClick={handleHistorical}
+            disabled={histLoading}
+            className="px-3.5 py-2 rounded-xl bg-purple-950/70 hover:bg-purple-900/70 border border-purple-800 text-xs font-semibold text-purple-300 flex items-center gap-2 transition-all"
+          >
+            {histLoading ? <div className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" /> : <History size={14} />}
+            7-Day Historical
+          </button>
         </div>
-        <div className="flex gap-3 mt-5">
-          <button className="btn-primary" onClick={handleGenerate} disabled={loading}>
-            {loading ? <div className="spinner" /> : <Zap size={16} />}
-            Generate Reading
-          </button>
-          <button className="btn-secondary" onClick={handleBatch} disabled={batchLoading}>
-            {batchLoading ? <div className="spinner" /> : <RefreshCw size={16} />}
-            Batch (10)
-          </button>
-          <button className="btn-secondary" onClick={handleHistorical} disabled={histLoading}>
-            {histLoading ? <div className="spinner" /> : <History size={16} />}
-            Historical (7d)
-          </button>
-        </div>
-        {status && (
-          <div className="badge badge-green w-full">{status}</div>
-        )}
       </div>
 
-      {/* Chart */}
-      <div className="card">
-        <h2 className="font-semibold text-white mb-4">Live Sensor Chart (Last 24)</h2>
-        {chartData.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#6b7280' }}>
-            Generate some readings first
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="t" tick={{ fill: '#6b7280', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
-              <Line type="monotone" dataKey="temp" stroke="#00d4ff" strokeWidth={2} dot={false} name="Temp (°C)" />
-              <Line type="monotone" dataKey="humidity" stroke="#7c3aed" strokeWidth={2} dot={false} name="Humidity (%)" />
-              <Line type="monotone" dataKey="air" stroke="#10b981" strokeWidth={2} dot={false} name="Air Quality" />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
+      {status && (
+        <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/60 text-xs text-cyan-300 font-mono flex items-center gap-2">
+          <CheckCircle size={15} className="text-cyan-400 flex-shrink-0" />
+          <span>{status}</span>
+        </div>
+      )}
+
+      {/* Realtime KPI Telemetry Gauges */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-xl bg-gray-900/80 border border-gray-800 shadow-md">
+          <div className="text-[11px] font-semibold uppercase text-gray-400 mb-1">Mean Temperature</div>
+          <div className="text-2xl font-black font-mono text-cyan-400">{avgTemp} °C</div>
+          <div className="text-[10px] text-gray-500 mt-1">Normal ambient range (15–40°C)</div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-gray-900/80 border border-gray-800 shadow-md">
+          <div className="text-[11px] font-semibold uppercase text-gray-400 mb-1">Relative Humidity</div>
+          <div className="text-2xl font-black font-mono text-purple-400">{avgHum} %</div>
+          <div className="text-[10px] text-gray-500 mt-1">Hygrometric distribution</div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-gray-900/80 border border-gray-800 shadow-md">
+          <div className="text-[11px] font-semibold uppercase text-gray-400 mb-1">Air Quality Index (AQI)</div>
+          <div className="text-2xl font-black font-mono text-emerald-400">{avgAqi} AQI</div>
+          <div className="text-[10px] text-gray-500 mt-1">Simulated particulate matter</div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-gray-900/80 border border-gray-800 shadow-md">
+          <div className="text-[11px] font-semibold uppercase text-gray-400 mb-1">Barometric Pressure</div>
+          <div className="text-2xl font-black font-mono text-indigo-400">{avgPress} hPa</div>
+          <div className="text-[10px] text-gray-500 mt-1">Atmospheric sensor stream</div>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="card">
+      {/* Sensor Readings Table */}
+      <div className="p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-xl overflow-hidden">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-white">Recent Readings ({readings.length})</h2>
-          <button className="btn-secondary text-xs" onClick={fetchReadings}>
-            <RefreshCw size={13} /> Refresh
-          </button>
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            Simulated Sensor Records ({readings.length})
+          </h2>
+          <span className="text-[11px] font-mono text-gray-500">
+            Click 'Encrypt & Upload' to process any record through PRE
+          </span>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="data-table">
+          <table className="w-full text-left text-xs font-mono">
             <thead>
-              <tr>
-                <th>Sensor ID</th>
-                <th>Temp (°C)</th>
-                <th>Humidity (%)</th>
-                <th>Air Quality</th>
-                <th>Pressure</th>
-                <th>Energy (kWh)</th>
-                <th>Status</th>
-                <th>Timestamp</th>
+              <tr className="border-b border-gray-800 text-[11px] text-gray-400 uppercase tracking-wider">
+                <th className="pb-3 pl-2">Device ID</th>
+                <th className="pb-3">Temperature</th>
+                <th className="pb-3">Humidity</th>
+                <th className="pb-3">Air Quality</th>
+                <th className="pb-3">Pressure</th>
+                <th className="pb-3">Status</th>
+                <th className="pb-3">Recorded At</th>
+                <th className="pb-3 text-right pr-2">Action</th>
               </tr>
             </thead>
-            <tbody>
-              {readings.slice(0, 30).map((r, i) => (
-                <tr key={i}>
-                  <td>
-                    <span className="font-mono text-xs" style={{ color: '#00d4ff' }}>{r.sensor_id}</span>
-                  </td>
-                  <td>{r.temperature?.toFixed(1)}</td>
-                  <td>{r.humidity?.toFixed(1)}</td>
-                  <td>{r.air_quality?.toFixed(0)}</td>
-                  <td>{r.pressure?.toFixed(1)}</td>
-                  <td>{r.energy_consumption?.toFixed(2)}</td>
-                  <td>
-                    <span className={`badge ${statusColor(r.device_status)}`}>
-                      {r.device_status}
+            <tbody className="divide-y divide-gray-800/60">
+              {readings.map((r, idx) => (
+                <tr key={idx} className="hover:bg-gray-800/30 transition-colors">
+                  <td className="py-3 pl-2 font-bold text-cyan-400">{r.sensor_id}</td>
+                  <td className="py-3 text-white">{r.temperature?.toFixed(2)} °C</td>
+                  <td className="py-3 text-gray-300">{r.humidity?.toFixed(2)} %</td>
+                  <td className="py-3">
+                    <span className="px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-800 text-emerald-400 text-[10px]">
+                      {r.air_quality?.toFixed(1)} AQI
                     </span>
                   </td>
-                  <td className="text-xs" style={{ color: '#6b7280' }}>
-                    {new Date(r.timestamp).toLocaleString()}
+                  <td className="py-3 text-gray-400">{r.pressure?.toFixed(1)} hPa</td>
+                  <td className="py-3">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      {r.device_status || 'online'}
+                    </span>
+                  </td>
+                  <td className="py-3 text-gray-500 text-[11px]">
+                    {new Date(r.timestamp || r.created_at || '').toLocaleTimeString()}
+                  </td>
+                  <td className="py-3 text-right pr-2">
+                    <button
+                      onClick={() => handleQuickEncrypt(r)}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-300 hover:text-white font-sans text-xs font-semibold flex items-center gap-1.5 ml-auto transition-all"
+                    >
+                      <Lock size={12} /> Encrypt
+                    </button>
                   </td>
                 </tr>
               ))}
-              {readings.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="text-center py-8" style={{ color: '#6b7280' }}>
-                    No readings yet — click Generate Reading
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Owner info */}
-      <div className="text-xs" style={{ color: '#374151' }}>
-        Logged in as: <span style={{ color: '#00d4ff' }}>{user?.username}</span> ({user?.role})
       </div>
     </div>
   );

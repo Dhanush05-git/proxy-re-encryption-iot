@@ -36,6 +36,7 @@ export interface SensorReading {
   energy_consumption: number;
   device_status: string;
   timestamp: string;
+  created_at?: string;
   owner_id?: number;
 }
 
@@ -99,8 +100,10 @@ export interface ReencryptResponse {
 }
 
 export interface SecurityTestResult {
-  test_name: string;
-  status: 'PASS' | 'FAIL';
+  test_name?: string;
+  name?: string;
+  status?: 'PASS' | 'FAIL';
+  passed?: boolean;
   details: string;
   duration_ms?: number;
 }

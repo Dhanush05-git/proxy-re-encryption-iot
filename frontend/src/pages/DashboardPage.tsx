@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Cpu, Lock, Share2, Users, Server, Activity,
-  RefreshCw, TrendingUp,
+  RefreshCw, TrendingUp, ArrowRight, ShieldCheck, ShieldAlert,
+  Zap, Database, Eye
 } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { getDashboardStats, getReadings } from '../lib/api';
 import type { AuditLog, SensorReading } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Stats {
   sensor_count: number;
@@ -18,22 +21,15 @@ interface Stats {
   recent_audit_logs: AuditLog[];
 }
 
-const statCards = [
-  { key: 'sensor_count', label: 'Sensor Readings', icon: Cpu, color: '#00d4ff', glow: 'rgba(0,212,255,0.2)' },
-  { key: 'file_count', label: 'Encrypted Files', icon: Lock, color: '#10b981', glow: 'rgba(16,185,129,0.2)' },
-  { key: 'grant_count', label: 'Active Grants', icon: Share2, color: '#7c3aed', glow: 'rgba(124,58,237,0.2)' },
-  { key: 'user_count', label: 'Registered Users', icon: Users, color: '#f59e0b', glow: 'rgba(245,158,11,0.2)' },
-  { key: 'proxy_op_count', label: 'Proxy Operations', icon: Server, color: '#a78bfa', glow: 'rgba(167,139,250,0.2)' },
-];
-
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string; color: string }[]; label?: string }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="card p-3 text-xs" style={{ border: '1px solid #1f2937' }}>
+    <div className="bg-gray-900 border border-gray-700 p-3 rounded-lg shadow-xl text-xs font-mono">
       <div className="text-gray-400 mb-1">{label}</div>
       {payload.map((p) => (
-        <div key={p.name} style={{ color: p.color }}>
-          {p.name}: <strong>{p.value?.toFixed(1)}</strong>
+        <div key={p.name} style={{ color: p.color }} className="flex justify-between gap-4 py-0.5">
+          <span>{p.name}:</span>
+          <span className="font-bold">{p.value?.toFixed(1)}</span>
         </div>
       ))}
     </div>
@@ -41,6 +37,8 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats | null>(null);
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,10 +48,10 @@ export default function DashboardPage() {
     try {
       const [sRes, rRes] = await Promise.allSettled([
         getDashboardStats(),
-        getReadings(undefined, 24),
+        getReadings(undefined, 20),
       ]);
       if (sRes.status === 'fulfilled') setStats(sRes.value.data);
-      if (rRes.status === 'fulfilled') setReadings(rRes.value.data.slice(-24));
+      if (rRes.status === 'fulfilled') setReadings(rRes.value.data.slice(-20));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -68,142 +66,201 @@ export default function DashboardPage() {
     time: `T-${readings.length - i}`,
     temperature: r.temperature,
     humidity: r.humidity,
+    pressure: r.pressure ? r.pressure / 25 : 40,
   }));
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">
-            System Dashboard
-          </h1>
-          <p className="text-sm mt-1" style={{ color: '#6b7280' }}>
-            Real-time overview of PRE-IoT security operations
-          </p>
+      {/* Top Banner with Quick Architecture Steps */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-950/40 via-indigo-950/40 to-purple-950/40 border border-cyan-800/40 p-6 shadow-xl">
+        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-mono font-medium mb-2">
+              <ShieldCheck size={14} /> Applied Cryptography Capstone Laboratory
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              Proxy Re-Encryption for Secure IoT Cloud Data Sharing
+            </h1>
+            <p className="text-xs text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              Demonstrates hybrid authenticated encryption (AES-256-GCM) with threshold proxy re-encryption (Umbral v0.3.0). 
+              Sensor data remains confidential from the semi-trusted cloud proxy while enabling fine-grained delegation.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refresh}
+              disabled={refreshing}
+              className="px-3.5 py-2 rounded-xl bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700 text-xs text-gray-200 font-medium flex items-center gap-2 transition-all"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin text-cyan-400' : 'text-gray-400'} />
+              Refresh
+            </button>
+            <button
+              onClick={() => navigate('/security')}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-xs font-bold text-white shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all"
+            >
+              Run Security Tests <ArrowRight size={14} />
+            </button>
+          </div>
         </div>
-        <button className="btn-secondary" onClick={refresh} disabled={refreshing}>
-          <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+
+        {/* 4-Step Interactive Pipeline Flow */}
+        <div className="mt-6 pt-5 border-t border-gray-800/80 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div
+            onClick={() => navigate('/sensors')}
+            className="cursor-pointer p-3 rounded-xl bg-gray-900/60 hover:bg-gray-800/60 border border-gray-800 hover:border-cyan-500/40 transition-all group"
+          >
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+              <span>Step 1</span>
+              <Cpu size={14} className="text-cyan-400 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xs font-bold text-white group-hover:text-cyan-300">Generate Telemetry</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Software IoT simulation</div>
+          </div>
+
+          <div
+            onClick={() => navigate('/encryption')}
+            className="cursor-pointer p-3 rounded-xl bg-gray-900/60 hover:bg-gray-800/60 border border-gray-800 hover:border-indigo-500/40 transition-all group"
+          >
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+              <span>Step 2</span>
+              <Lock size={14} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xs font-bold text-white group-hover:text-indigo-300">Encrypt & Encapsulate</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">AES-256 + PRE Capsule</div>
+          </div>
+
+          <div
+            onClick={() => navigate('/sharing')}
+            className="cursor-pointer p-3 rounded-xl bg-gray-900/60 hover:bg-gray-800/60 border border-gray-800 hover:border-purple-500/40 transition-all group"
+          >
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+              <span>Step 3</span>
+              <Share2 size={14} className="text-purple-400 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xs font-bold text-white group-hover:text-purple-300">Delegate to Bob</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">2-of-3 threshold kfrags</div>
+          </div>
+
+          <div
+            onClick={() => navigate('/recipient')}
+            className="cursor-pointer p-3 rounded-xl bg-gray-900/60 hover:bg-gray-800/60 border border-gray-800 hover:border-emerald-500/40 transition-all group"
+          >
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+              <span>Step 4</span>
+              <Users size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xs font-bold text-white group-hover:text-emerald-300">Bob Decrypts</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">2 CFrags decapsulate DEK</div>
+          </div>
+        </div>
       </div>
 
-      {/* Stat cards */}
-      {loading ? (
-        <div className="grid grid-cols-5 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="card animate-pulse" style={{ height: 100 }} />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {statCards.map((card) => {
-            const Icon = card.icon;
-            const val = stats ? (stats as unknown as Record<string, number>)[card.key] : 0;
-            return (
-              <div
-                key={card.key}
-                className="card"
-                style={{ border: `1px solid ${card.glow}` }}
-              >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center mb-3"
-                  style={{ background: card.glow }}
-                >
-                  <Icon size={20} style={{ color: card.color }} />
-                </div>
-                <div className="text-3xl font-bold text-white mb-1">
-                  {val ?? 0}
-                </div>
-                <div className="text-xs font-medium" style={{ color: '#6b7280' }}>
-                  {card.label}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Chart + Audit logs */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Chart */}
-        <div className="card col-span-2">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={18} style={{ color: '#00d4ff' }} />
-            <h2 className="font-semibold text-white">Sensor Data Trend (Last 24 Readings)</h2>
-          </div>
-          {readings.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-sm" style={{ color: '#6b7280' }}>
-              No sensor data yet — go to Sensors to generate readings
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {[
+          { label: 'IoT Sensor Readings', val: stats?.sensor_count ?? 0, icon: Cpu, color: 'text-cyan-400', border: 'border-cyan-500/30' },
+          { label: 'Cloud Encrypted Files', val: stats?.file_count ?? 0, icon: Lock, color: 'text-emerald-400', border: 'border-emerald-500/30' },
+          { label: 'Active Sharing Grants', val: stats?.grant_count ?? 0, icon: Share2, color: 'text-purple-400', border: 'border-purple-500/30' },
+          { label: 'Registered Entities', val: stats?.user_count ?? 3, icon: Users, color: 'text-amber-400', border: 'border-amber-500/30' },
+          { label: 'Proxy Re-encryptions', val: stats?.proxy_op_count ?? 0, icon: Server, color: 'text-indigo-400', border: 'border-indigo-500/30' },
+        ].map((item, i) => (
+          <div key={i} className={`p-4 rounded-xl bg-gray-900/80 border ${item.border} shadow-lg relative overflow-hidden`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">{item.label}</span>
+              <item.icon size={16} className={item.color} />
             </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={chartData}>
+            <div className="text-2xl font-black text-white font-mono">
+              {item.val}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active in database
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts & Activity Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Telemetry Chart */}
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Activity size={16} className="text-cyan-400" /> Live Simulated Environmental Telemetry
+              </h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">Real-time temperature (°C) and humidity (%) telemetry stream</p>
+            </div>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-300">
+              {readings.length} readings recorded
+            </span>
+          </div>
+
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#00d4ff" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="humGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+                <XAxis dataKey="time" stroke="#6b7280" fontSize={10} />
+                <YAxis stroke="#6b7280" fontSize={10} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
-                <Line type="monotone" dataKey="temperature" stroke="#00d4ff" strokeWidth={2} dot={false} name="Temp (°C)" />
-                <Line type="monotone" dataKey="humidity" stroke="#7c3aed" strokeWidth={2} dot={false} name="Humidity (%)" />
-              </LineChart>
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                <Area type="monotone" dataKey="temperature" name="Temperature (°C)" stroke="#00d4ff" strokeWidth={2} fillOpacity={1} fill="url(#tempGrad)" />
+                <Area type="monotone" dataKey="humidity" name="Humidity (%)" stroke="#7c3aed" strokeWidth={2} fillOpacity={1} fill="url(#humGrad)" />
+              </AreaChart>
             </ResponsiveContainer>
-          )}
+          </div>
         </div>
 
-        {/* Audit logs */}
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity size={18} style={{ color: '#10b981' }} />
-            <h2 className="font-semibold text-white">Recent Audit Logs</h2>
+        {/* Cryptographic Audit Trail */}
+        <div className="p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Zap size={16} className="text-indigo-400" /> Cryptographic Audit Trail
+            </h2>
+            <span className="text-[10px] font-mono text-gray-400">Live</span>
           </div>
-          <div className="space-y-2">
-            {stats?.recent_audit_logs?.length ? (
-              stats.recent_audit_logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="p-2 rounded-lg text-xs"
-                  style={{ background: '#0d1225', border: '1px solid #1f2937' }}
-                >
-                  <div className="font-semibold" style={{ color: '#10b981' }}>
-                    {log.action}
+
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[260px]">
+            {stats?.recent_audit_logs && stats.recent_audit_logs.length > 0 ? (
+              stats.recent_audit_logs.map((log) => {
+                let badgeColor = 'bg-gray-800 text-gray-300';
+                if (log.action.includes('encrypt') || log.action.includes('upload')) badgeColor = 'bg-cyan-950 text-cyan-300 border-cyan-800';
+                if (log.action.includes('grant')) badgeColor = 'bg-purple-950 text-purple-300 border-purple-800';
+                if (log.action.includes('reencrypt')) badgeColor = 'bg-indigo-950 text-indigo-300 border-indigo-800';
+                if (log.action.includes('revoke')) badgeColor = 'bg-red-950 text-red-300 border-red-800';
+
+                return (
+                  <div key={log.id} className="p-2.5 rounded-lg bg-gray-950/70 border border-gray-800/80 text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono border font-semibold ${badgeColor}`}>
+                        {log.action}
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-500">
+                        {new Date(log.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 font-mono truncate">
+                      {log.details_json || 'Cryptographic operation logged'}
+                    </div>
                   </div>
-                  <div style={{ color: '#6b7280' }} className="mt-0.5 truncate">
-                    {new Date(log.created_at).toLocaleString()}
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
-              <div className="text-xs" style={{ color: '#6b7280' }}>
-                No audit logs yet
+              <div className="text-center py-10 text-gray-500 text-xs">
+                No audit events recorded yet. Run tests or generate telemetry.
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* System status */}
-      <div className="card">
-        <h2 className="font-semibold text-white mb-4">System Status</h2>
-        <div className="grid grid-cols-4 gap-4">
-          {[
-            { label: 'Umbral PRE', status: 'ACTIVE', color: 'green' },
-            { label: 'AES-256-GCM', status: 'ACTIVE', color: 'green' },
-            { label: 'Proxy Workers', status: '3/3 ONLINE', color: 'cyan' },
-            { label: 'Key Management', status: 'SECURE', color: 'cyan' },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="flex items-center gap-3 p-3 rounded-lg"
-              style={{ background: '#0d1225', border: '1px solid #1f2937' }}
-            >
-              <span className={`pulse-dot ${s.color}`} />
-              <div>
-                <div className="text-xs font-semibold text-white">{s.label}</div>
-                <div className="text-xs mt-0.5" style={{ color: '#6b7280' }}>{s.status}</div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
